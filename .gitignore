@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project ignore files:
+/data/raw/
+/artifacts/
+/logs/
+/stuff/
+/reports/tests/

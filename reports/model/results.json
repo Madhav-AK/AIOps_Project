@@ -1,0 +1,326 @@
+{
+  "data_summary": {
+    "source": {
+      "rows": 6362620,
+      "class_counts": {
+        "0": 6354407,
+        "1": 8213
+      },
+      "fraud_fraction": 0.001290820448180152,
+      "transaction_types": {
+        "CASH_OUT": 2237500,
+        "PAYMENT": 2151495,
+        "CASH_IN": 1399284,
+        "TRANSFER": 532909,
+        "DEBIT": 41432
+      },
+      "missing_values": {
+        "type": 0,
+        "amount": 0,
+        "oldbalanceOrg": 0,
+        "oldbalanceDest": 0,
+        "isFraud": 0
+      },
+      "numeric_ranges": {
+        "amount": {
+          "minimum": 0.0,
+          "maximum": 92445516.64
+        },
+        "oldbalanceOrg": {
+          "minimum": 0.0,
+          "maximum": 59585040.37
+        },
+        "oldbalanceDest": {
+          "minimum": 0.0,
+          "maximum": 356015889.35
+        }
+      }
+    },
+    "splits": {
+      "train": {
+        "rows": 350000,
+        "class_counts": {
+          "0": 349547,
+          "1": 453
+        },
+        "fraud_fraction": 0.0012942857142857142,
+        "transaction_types": {
+          "CASH_OUT": 123068,
+          "PAYMENT": 118625,
+          "CASH_IN": 76568,
+          "TRANSFER": 29510,
+          "DEBIT": 2229
+        },
+        "missing_values": {
+          "type": 0,
+          "amount": 0,
+          "oldbalanceOrg": 0,
+          "oldbalanceDest": 0,
+          "isFraud": 0
+        },
+        "numeric_ranges": {
+          "amount": {
+            "minimum": 0.0,
+            "maximum": 53653616.57
+          },
+          "oldbalanceOrg": {
+            "minimum": 0.0,
+            "maximum": 34657149.76
+          },
+          "oldbalanceDest": {
+            "minimum": 0.0,
+            "maximum": 251007806.66
+          }
+        }
+      },
+      "validation": {
+        "rows": 75000,
+        "class_counts": {
+          "0": 74903,
+          "1": 97
+        },
+        "fraud_fraction": 0.0012933333333333334,
+        "transaction_types": {
+          "CASH_OUT": 26392,
+          "PAYMENT": 25305,
+          "CASH_IN": 16635,
+          "TRANSFER": 6179,
+          "DEBIT": 489
+        },
+        "missing_values": {
+          "type": 0,
+          "amount": 0,
+          "oldbalanceOrg": 0,
+          "oldbalanceDest": 0,
+          "isFraud": 0
+        },
+        "numeric_ranges": {
+          "amount": {
+            "minimum": 1.03,
+            "maximum": 48672213.16
+          },
+          "oldbalanceOrg": {
+            "minimum": 0.0,
+            "maximum": 35892438.93
+          },
+          "oldbalanceDest": {
+            "minimum": 0.0,
+            "maximum": 275405172.22
+          }
+        }
+      },
+      "test": {
+        "rows": 75000,
+        "class_counts": {
+          "0": 74903,
+          "1": 97
+        },
+        "fraud_fraction": 0.0012933333333333334,
+        "transaction_types": {
+          "CASH_OUT": 26186,
+          "PAYMENT": 25347,
+          "CASH_IN": 16736,
+          "TRANSFER": 6240,
+          "DEBIT": 491
+        },
+        "missing_values": {
+          "type": 0,
+          "amount": 0,
+          "oldbalanceOrg": 0,
+          "oldbalanceDest": 0,
+          "isFraud": 0
+        },
+        "numeric_ranges": {
+          "amount": {
+            "minimum": 0.27,
+            "maximum": 43886668.1
+          },
+          "oldbalanceOrg": {
+            "minimum": 0.0,
+            "maximum": 33593209.9
+          },
+          "oldbalanceDest": {
+            "minimum": 0.0,
+            "maximum": 151513430.01
+          }
+        }
+      }
+    },
+    "sample_rows": 500000,
+    "load_validate_split_seconds": 2.1948097220010823
+  },
+  "metrics": {
+    "validation": {
+      "always_non_fraud": {
+        "precision": 0.0,
+        "recall": 0.0,
+        "f1": 0.0,
+        "average_precision": 0.0012933333333333334,
+        "accuracy": 0.9987066666666666,
+        "confusion_matrix": [
+          [
+            74903,
+            0
+          ],
+          [
+            97,
+            0
+          ]
+        ],
+        "flagged_count": 0,
+        "rows": 75000
+      },
+      "xgboost_unweighted": {
+        "precision": 0.946236559139785,
+        "recall": 0.9072164948453608,
+        "f1": 0.9263157894736842,
+        "average_precision": 0.986181374755751,
+        "accuracy": 0.9998133333333333,
+        "confusion_matrix": [
+          [
+            74898,
+            5
+          ],
+          [
+            9,
+            88
+          ]
+        ],
+        "flagged_count": 93,
+        "rows": 75000
+      },
+      "xgboost_weighted": {
+        "precision": 0.8016528925619835,
+        "recall": 1.0,
+        "f1": 0.8899082568807339,
+        "average_precision": 0.9826838079570319,
+        "accuracy": 0.99968,
+        "confusion_matrix": [
+          [
+            74879,
+            24
+          ],
+          [
+            0,
+            97
+          ]
+        ],
+        "flagged_count": 121,
+        "rows": 75000
+      }
+    },
+    "selection_rule": "Highest validation F1 at fixed threshold; ties favour unweighted.",
+    "selected_model": "xgboost_unweighted",
+    "decision_threshold": 0.5,
+    "scale_pos_weight": {
+      "xgboost_unweighted": 1.0,
+      "xgboost_weighted": 771.6269315673289
+    },
+    "training_seconds": {
+      "xgboost_unweighted": 0.5848935169997276,
+      "xgboost_weighted": 0.5635500039934414
+    },
+    "test": {
+      "precision": 0.9560439560439561,
+      "recall": 0.8969072164948454,
+      "f1": 0.925531914893617,
+      "average_precision": 0.981909257248943,
+      "accuracy": 0.9998133333333333,
+      "confusion_matrix": [
+        [
+          74899,
+          4
+        ],
+        [
+          10,
+          87
+        ]
+      ],
+      "flagged_count": 91,
+      "rows": 75000
+    }
+  },
+  "feature_importance": [
+    {
+      "feature": "numeric__amount_minus_sender_balance",
+      "importance": 0.3688890337944031
+    },
+    {
+      "feature": "numeric__oldbalanceOrg",
+      "importance": 0.2685792148113251
+    },
+    {
+      "feature": "type__type_CASH_OUT",
+      "importance": 0.19210471212863922
+    },
+    {
+      "feature": "type__type_TRANSFER",
+      "importance": 0.08908955752849579
+    },
+    {
+      "feature": "numeric__amount",
+      "importance": 0.06476670503616333
+    },
+    {
+      "feature": "numeric__oldbalanceDest",
+      "importance": 0.0123291602358222
+    },
+    {
+      "feature": "type__type_PAYMENT",
+      "importance": 0.004241607151925564
+    },
+    {
+      "feature": "type__type_CASH_IN",
+      "importance": 0.0
+    },
+    {
+      "feature": "type__type_DEBIT",
+      "importance": 0.0
+    }
+  ],
+  "config": {
+    "seed": 42,
+    "data": {
+      "path": "data/raw/paysim.csv",
+      "sample_size": 500000,
+      "validation_fraction": 0.15,
+      "test_fraction": 0.15,
+      "minimum_fraud_per_split": 10
+    },
+    "model": {
+      "n_estimators": 100,
+      "max_depth": 3,
+      "learning_rate": 0.1,
+      "n_jobs": 2
+    },
+    "decision_threshold": 0.5,
+    "outputs": {
+      "artifacts": "artifacts/model",
+      "reports": "reports/model"
+    }
+  },
+  "run_metadata": {
+    "finished_at_utc": "2026-11-11T14:14:20.572662+00:00",
+    "git_commit_at_run": "b5dd1ca3b09003f5cae7ed51698d945fe5e6d4aa",
+    "git_worktree_dirty": true,
+    "source_files_sha256": {
+      "fraud_detection/train.py": "4477e491766e7dc8d709d7be7bb2e1ba7af8df96da2144c4ddddde357b1d9dc5",
+      "fraud_detection/data.py": "d8c7390fe59bbb8c096c78f52a958268cba1ce063a28175dac7da09e17f12642",
+      "fraud_detection/predict.py": "ed4363e879d44de62b0aaab3ba370a105816b256f729811333720b5692e6cabc",
+      "fraud_detection/features.py": "2874a9dd2c4a7bc40ba9415fd6e686a20d94e4c442b4efc35504bd7658115a61",
+      "fraud_detection/__init__.py": "c8f4f12da092382f237d628d49a4ec8edfa5211ac7450d33e0bcfff2e781ff86",
+      "params.yaml": "3f6fa98d3a7704e6d59e4d150a9fb28bc63dce5ea01c7716fb6b4b7d96d227b3",
+      "requirements.txt": "f8ac6a08f25d09d436e3b39ee1a174ccf263e13c1505caafc10ebb3fb941896a"
+    },
+    "dataset_sha256": "16910f90577b0d981bf8ff289714510bb89bc71bff7d3f220f024e287e4eea6b",
+    "python": "3.12.3",
+    "packages": {
+      "numpy": "2.3.4",
+      "pandas": "2.3.3",
+      "scikit-learn": "1.7.2",
+      "xgboost-cpu": "3.1.2",
+      "joblib": "1.5.2"
+    },
+    "total_seconds": 3.7270751260002726
+  }
+}
