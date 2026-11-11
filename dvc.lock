@@ -1,0 +1,164 @@
+schema: '2.0'
+stages:
+  prepare:
+    cmd: python -m fraud_detection.prepare
+    deps:
+    - path: data/raw/paysim.csv
+      hash: md5
+      md5: e92a5f7447f43712f1dca473d0b0fa85
+      size: 493534783
+    - path: data/source.json
+      hash: md5
+      md5: 503bcbbde13c708caeeba49ef852a87b
+      size: 724
+    - path: fraud_detection/common.py
+      hash: md5
+      md5: 6b0ae66fb2ba7796099b70cade733463
+      size: 2623
+    - path: fraud_detection/data.py
+      hash: md5
+      md5: a42aa46605ea9ec3c2376c00ef4838a5
+      size: 3465
+    - path: fraud_detection/features.py
+      hash: md5
+      md5: 31fdce634a41b2d85392dbee4c9e3cf5
+      size: 3283
+    - path: fraud_detection/prepare.py
+      hash: md5
+      md5: 24f9aa37c8f3c4085185f42a8d02a386
+      size: 3996
+    - path: requirements.txt
+      hash: md5
+      md5: da4d8a43eeaa83aa5715a40bc9f5d664
+      size: 2842
+    params:
+      params.yaml:
+        data:
+          path: data/raw/paysim.csv
+          prepared: data/prepared
+          batch_rows: 250000
+          workers: 2
+          sample_size: 500000
+          validation_fraction: 0.15
+          test_fraction: 0.15
+          minimum_fraud_per_split: 10
+        seed: 42
+    outs:
+    - path: data/prepared
+      hash: md5
+      md5: 090b8a4cbc926c0ce8ae4119e33e84b1.dir
+      size: 12091999
+      nfiles: 4
+  train:
+    cmd: MLFLOW_TRACKING_URI=http://127.0.0.1:5000 mlflow run . --env-manager 
+      local --entry-point train --experiment-name transaction-fraud -P 
+      config=params.yaml
+    deps:
+    - path: MLproject
+      hash: md5
+      md5: 40850fdc6978ff5ccc0311072038ed7b
+      size: 205
+    - path: data/prepared/preparation.json
+      hash: md5
+      md5: e36858dd0c96079fa585257e902419c3
+      size: 3483
+    - path: data/prepared/train.parquet
+      hash: md5
+      md5: 259e0680e21fe8ee05e9f876ccb3bb8d
+      size: 8113373
+    - path: data/prepared/validation.parquet
+      hash: md5
+      md5: 6cd0a617cf4db45dd05fcd4482599e04
+      size: 1987603
+    - path: fraud_detection/common.py
+      hash: md5
+      md5: 6b0ae66fb2ba7796099b70cade733463
+      size: 2623
+    - path: fraud_detection/data.py
+      hash: md5
+      md5: a42aa46605ea9ec3c2376c00ef4838a5
+      size: 3465
+    - path: fraud_detection/evaluate.py
+      hash: md5
+      md5: f3421cb1e0eaf965bcfeb75fbd10ba10
+      size: 5713
+    - path: fraud_detection/features.py
+      hash: md5
+      md5: 31fdce634a41b2d85392dbee4c9e3cf5
+      size: 3283
+    - path: fraud_detection/train.py
+      hash: md5
+      md5: c01e88a5259b72e1c93db4fb84254d10
+      size: 6076
+    - path: python_env.yaml
+      hash: md5
+      md5: 357880fd16f9744b4bafdb2e9894a4e2
+      size: 89
+    - path: requirements.txt
+      hash: md5
+      md5: da4d8a43eeaa83aa5715a40bc9f5d664
+      size: 2842
+    params:
+      params.yaml:
+        decision_threshold: 0.5
+        model:
+          n_estimators: 100
+          max_depth: 3
+          learning_rate: 0.1
+          n_jobs: 2
+        outputs.candidates: artifacts/candidates
+        seed: 42
+        tracking:
+          uri: http://127.0.0.1:5000
+          experiment: transaction-fraud
+          model_name: transaction-fraud
+    outs:
+    - path: artifacts/candidates
+      hash: md5
+      md5: 0bffc2883d0957c566737b680ab87a1e.dir
+      size: 219279
+      nfiles: 4
+  evaluate:
+    cmd: python -m fraud_detection.evaluate
+    deps:
+    - path: artifacts/candidates
+      hash: md5
+      md5: 0bffc2883d0957c566737b680ab87a1e.dir
+      size: 219279
+      nfiles: 4
+    - path: data/prepared/test.parquet
+      hash: md5
+      md5: c8ac40e3d9d8d24472b41e3a85fbe4dc
+      size: 1987540
+    - path: fraud_detection/common.py
+      hash: md5
+      md5: 6b0ae66fb2ba7796099b70cade733463
+      size: 2623
+    - path: fraud_detection/evaluate.py
+      hash: md5
+      md5: f3421cb1e0eaf965bcfeb75fbd10ba10
+      size: 5713
+    - path: fraud_detection/features.py
+      hash: md5
+      md5: 31fdce634a41b2d85392dbee4c9e3cf5
+      size: 3283
+    - path: requirements.txt
+      hash: md5
+      md5: da4d8a43eeaa83aa5715a40bc9f5d664
+      size: 2842
+    params:
+      params.yaml:
+        decision_threshold: 0.5
+        outputs.artifacts: artifacts/model
+        outputs.reports: reports/model
+        tracking.model_name: transaction-fraud
+    outs:
+    - path: artifacts/model
+      hash: md5
+      md5: e46ad5daad15e058563accd0a556d057.dir
+      size: 108029
+      nfiles: 2
+    - path: reports/model/results.json
+      hash: md5
+      md5: 99ab2372650f1a6f2833ce8040916ea0
+      size: 1690

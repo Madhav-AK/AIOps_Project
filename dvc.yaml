@@ -1,0 +1,60 @@
+stages:
+  prepare:
+    cmd: python -m fraud_detection.prepare
+    deps:
+      - data/raw/paysim.csv
+      - data/source.json
+      - fraud_detection/prepare.py
+      - fraud_detection/data.py
+      - fraud_detection/features.py
+      - fraud_detection/common.py
+      - requirements.txt
+    params:
+      - seed
+      - data
+    outs:
+      - data/prepared
+  train:
+    cmd: >-
+      MLFLOW_TRACKING_URI=${tracking.uri}
+      mlflow run . --env-manager local --entry-point train
+      --experiment-name ${tracking.experiment} -P config=params.yaml
+    deps:
+      - data/prepared/train.parquet
+      - data/prepared/validation.parquet
+      - data/prepared/preparation.json
+      - fraud_detection/train.py
+      - fraud_detection/evaluate.py
+      - fraud_detection/features.py
+      - fraud_detection/common.py
+      - fraud_detection/data.py
+      - MLproject
+      - python_env.yaml
+      - requirements.txt
+    params:
+      - seed
+      - model
+      - decision_threshold
+      - tracking
+      - outputs.candidates
+    outs:
+      - artifacts/candidates
+  evaluate:
+    cmd: python -m fraud_detection.evaluate
+    deps:
+      - artifacts/candidates
+      - data/prepared/test.parquet
+      - fraud_detection/evaluate.py
+      - fraud_detection/features.py
+      - fraud_detection/common.py
+      - requirements.txt
+    params:
+      - decision_threshold
+      - tracking.model_name
+      - outputs.artifacts
+      - outputs.reports
+    outs:
+      - artifacts/model
+    metrics:
+      - reports/model/results.json:
+          cache: false

@@ -1,6 +1,9 @@
 seed: 42
 data:
   path: data/raw/paysim.csv
+  prepared: data/prepared
+  batch_rows: 250000
+  workers: 2
   sample_size: 500000
   validation_fraction: 0.15
   test_fraction: 0.15
@@ -11,6 +14,11 @@ model:
   learning_rate: 0.1
   n_jobs: 2
 decision_threshold: 0.5
+tracking:
+  uri: http://127.0.0.1:5000
+  experiment: transaction-fraud
+  model_name: transaction-fraud
 outputs:
+  candidates: artifacts/candidates
   artifacts: artifacts/model
   reports: reports/model

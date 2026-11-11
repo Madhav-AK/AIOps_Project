@@ -1,170 +1,138 @@
-"""Run the basic XGBoost comparison; operational tracking is added in commit 2."""
+"""Train the simple comparison on prepared data through an MLflow Project."""
 
 import argparse
-import hashlib
 import json
 import logging
-import platform
-import subprocess
+import os
 import time
-from datetime import datetime, timezone
-from importlib.metadata import version
 from pathlib import Path
 
 import joblib
-import numpy as np
+import mlflow
+import mlflow.sklearn
 import pandas as pd
-import yaml
+from mlflow.models import infer_signature
 from sklearn.dummy import DummyClassifier
-from sklearn.metrics import (
-    accuracy_score,
-    average_precision_score,
-    confusion_matrix,
-    f1_score,
-    precision_score,
-    recall_score,
-)
 
-from fraud_detection.data import describe, load_dataset, sample_and_split, training_positive_weight
+from fraud_detection.common import read_config, source_metadata, write_json
+from fraud_detection.data import training_positive_weight
+from fraud_detection.evaluate import score_model
 from fraud_detection.features import INPUT_COLUMNS, TARGET, build_model
 
 LOGGER = logging.getLogger(__name__)
 
 
-def file_hash(path: Path) -> str:
-    with path.open("rb") as source:
-        return hashlib.file_digest(source, "sha256").hexdigest()
-
-
-def evaluate(model, frame: pd.DataFrame, threshold: float) -> dict:
-    """Use continuous scores for average precision and a fixed threshold for labels."""
-    labels = frame[TARGET]
-    scores = model.predict_proba(frame.loc[:, list(INPUT_COLUMNS)])[:, 1]
-    if not np.isfinite(scores).all() or ((scores < 0) | (scores > 1)).any():
-        raise ValueError("Model scores must be finite and in [0, 1].")
-    predictions = (scores >= threshold).astype(int)
-    return {
-        "precision": float(precision_score(labels, predictions, zero_division=0)),
-        "recall": float(recall_score(labels, predictions, zero_division=0)),
-        "f1": float(f1_score(labels, predictions, zero_division=0)),
-        "average_precision": float(average_precision_score(labels, scores)),
-        "accuracy": float(accuracy_score(labels, predictions)),
-        "confusion_matrix": confusion_matrix(labels, predictions, labels=[0, 1]).tolist(),
-        "flagged_count": int(predictions.sum()),
-        "rows": len(frame),
-    }
-
-
-def write_json(path: Path, content: dict | list) -> None:
-    path.write_text(json.dumps(content, indent=2, allow_nan=False) + "\n")
-
-
 def run(config_path: Path) -> dict:
-    started = time.perf_counter()
-    config = yaml.safe_load(config_path.read_text())
+    if not all(os.environ.get(key) for key in ("MLFLOW_RUN_ID", "MLFLOW_TRACKING_URI")):
+        raise ValueError(
+            "Training requires an MLflow Project run; start the server and use dvc repro."
+        )
+    config = read_config(config_path)
     threshold = config["decision_threshold"]
     if not 0 < threshold < 1:
         raise ValueError("Decision threshold must be between 0 and 1.")
-    reports = Path(config["outputs"]["reports"])
-    artifacts = Path(config["outputs"]["artifacts"])
-    reports.mkdir(parents=True, exist_ok=True)
-    artifacts.mkdir(parents=True, exist_ok=True)
-
-    source = Path(config["data"]["path"])
-    LOGGER.info("Loading and validating %s", source)
-    data_started = time.perf_counter()
-    raw = load_dataset(source)
-    summary = {"source": describe(raw)}
-    splits = sample_and_split(raw, config["data"], config["seed"])
-    summary["splits"] = {name: describe(frame) for name, frame in splits.items()}
-    summary["sample_rows"] = sum(len(frame) for frame in splits.values())
-    summary["load_validate_split_seconds"] = time.perf_counter() - data_started
-    LOGGER.info("Read %s rows; sampled %s", len(raw), summary["sample_rows"])
-    del raw
-    # Index membership makes split disjointness and future reproduction inspectable.
-    np.savez(artifacts / "split_indices.npz", **{k: v.index.to_numpy() for k, v in splits.items()})
-    train = splits["train"]
+    prepared = Path(config["data"]["prepared"])
+    train = pd.read_parquet(prepared / "train.parquet")
+    validation = pd.read_parquet(prepared / "validation.parquet")
+    preparation = json.loads((prepared / "preparation.json").read_text())
+    output = Path(config["outputs"]["candidates"])
+    output.mkdir(parents=True, exist_ok=True)
     inputs, labels = train.loc[:, list(INPUT_COLUMNS)], train[TARGET]
     weight = training_positive_weight(labels)
-
-    dummy = DummyClassifier(strategy="constant", constant=0).fit(inputs, labels)
-    validation = {"always_non_fraud": evaluate(dummy, splits["validation"], threshold)}
+    metadata = source_metadata(config_path)
+    metadata["dataset_sha256"] = preparation["dataset_sha256"]
+    uri = os.environ["MLFLOW_TRACKING_URI"]
+    mlflow.set_tracking_uri(uri)
+    example = inputs.head(3).astype({"type": "str"})
     candidates = {}
-    training_times = {}
-    for name, positive_weight in [("xgboost_unweighted", 1.0), ("xgboost_weighted", weight)]:
-        model = build_model(config["model"], config["seed"], positive_weight)
-        LOGGER.info("Training %s (scale_pos_weight=%.3f)", name, positive_weight)
-        fit_started = time.perf_counter()
-        model.fit(inputs, labels)
-        training_times[name] = time.perf_counter() - fit_started
-        validation[name] = evaluate(model, splits["validation"], threshold)
-        candidates[name] = model
-        LOGGER.info("%s validation: %s", name, validation[name])
-
-    # The fixed selection rule sees validation only. The test split is evaluated afterwards.
-    selected_name = max(candidates, key=lambda name: validation[name]["f1"])
-    selected = candidates[selected_name]
-    test_metrics = evaluate(selected, splits["test"], threshold)
-    joblib.dump(selected, artifacts / "model.joblib")
-    write_json(
-        artifacts / "model_info.json",
-        {
-            "selected_model": selected_name,
-            "decision_threshold": threshold,
-            "input_columns": list(INPUT_COLUMNS),
-        },
-    )
-    names = selected.named_steps["encode"].get_feature_names_out()
-    importances = selected.named_steps["classifier"].feature_importances_
-    feature_importances = sorted(
-        [{"feature": str(k), "importance": float(v)} for k, v in zip(names, importances)],
-        key=lambda item: item["importance"],
-        reverse=True,
-    )
-    metrics = {
-        "validation": validation,
-        "selection_rule": "Highest validation F1 at fixed threshold; ties favour unweighted.",
-        "selected_model": selected_name,
-        "decision_threshold": threshold,
-        "scale_pos_weight": {"xgboost_unweighted": 1.0, "xgboost_weighted": weight},
-        "training_seconds": training_times,
-        "test": test_metrics,
-    }
-    source_files = [
-        *Path("fraud_detection").glob("*.py"),
-        config_path,
-        Path("requirements.txt"),
-    ]
-    metadata = {
-        "finished_at_utc": datetime.now(timezone.utc).isoformat(),
-        "git_commit_at_run": subprocess.check_output(
-            ["git", "rev-parse", "HEAD"], text=True
-        ).strip(),
-        "git_worktree_dirty": bool(
-            subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()
-        ),
-        "source_files_sha256": {p.as_posix(): file_hash(p) for p in source_files if p.exists()},
-        "dataset_sha256": file_hash(source),
-        "python": platform.python_version(),
-        "packages": {
-            name: version(name)
-            for name in ["numpy", "pandas", "scikit-learn", "xgboost-cpu", "joblib"]
-        },
-        "total_seconds": time.perf_counter() - started,
-    }
-    write_json(
-        reports / "results.json",
-        {
-            "data_summary": summary,
-            "metrics": metrics,
-            "feature_importance": feature_importances,
-            "config": config,
-            "run_metadata": metadata,
-        },
-    )
-    LOGGER.info("Selected %s; held-out test: %s", selected_name, test_metrics)
-    LOGGER.info("Reports: %s; fitted pipeline: %s", reports, artifacts / "model.joblib")
-    return metrics
+    # Resume the required Project run. MLflow consumes MLFLOW_RUN_ID before child runs start.
+    with mlflow.start_run(run_name="fraud-comparison") as parent:
+        mlflow.set_tags(
+            {
+                "source_git_commit": metadata["git_commit"],
+                "source_worktree_dirty": str(metadata["source_worktree_dirty"]),
+                "dataset_sha256": preparation["dataset_sha256"],
+            }
+        )
+        mlflow.log_params(
+            {
+                "seed": config["seed"],
+                "decision_threshold": threshold,
+                "training_rows": len(train),
+                "validation_rows": len(validation),
+                "sample_size": config["data"]["sample_size"],
+                **{f"model.{k}": v for k, v in config["model"].items()},
+            }
+        )
+        mlflow.log_dict(config, "config.json")
+        mlflow.log_dict(metadata, "lineage.json")
+        mlflow.log_dict(preparation, "data_preparation.json")
+        for name, positive_weight in [
+            ("always_non_fraud", None),
+            ("xgboost_unweighted", 1.0),
+            ("xgboost_weighted", weight),
+        ]:
+            with mlflow.start_run(run_name=name, nested=True) as child:
+                model = (
+                    DummyClassifier(strategy="constant", constant=0)
+                    if positive_weight is None
+                    else build_model(config["model"], config["seed"], positive_weight)
+                )
+                LOGGER.info("Training %s", name)
+                started = time.perf_counter()
+                model.fit(inputs, labels)
+                duration = time.perf_counter() - started
+                metrics = score_model(model, validation, threshold)
+                path = output / f"{name}.joblib"
+                joblib.dump(model, path)
+                mlflow.log_params(
+                    {"candidate": name, "seed": config["seed"], "decision_threshold": threshold}
+                )
+                if positive_weight is not None:
+                    mlflow.log_params({**config["model"], "scale_pos_weight": positive_weight})
+                mlflow.log_metrics(
+                    {
+                        f"validation_{k}": v
+                        for k, v in metrics.items()
+                        if isinstance(v, (int, float))
+                    }
+                )
+                mlflow.log_metric("training_seconds", duration)
+                mlflow.set_tags(
+                    {
+                        "source_git_commit": metadata["git_commit"],
+                        "dataset_sha256": preparation["dataset_sha256"],
+                    }
+                )
+                mlflow.log_dict(metrics, "validation.json")
+                signature = infer_signature(example, model.predict_proba(example))
+                logged = mlflow.sklearn.log_model(
+                    sk_model=model,
+                    name="model",
+                    pyfunc_predict_fn="predict_proba",
+                    metadata={"decision_threshold": threshold},
+                    code_paths=["fraud_detection"],
+                    signature=signature,
+                    input_example=example,
+                    pip_requirements=str(Path("requirements.txt").resolve()),
+                )
+                candidates[name] = {
+                    "run_id": child.info.run_id,
+                    "model_uri": logged.model_uri,
+                    "validation": metrics,
+                    "training_seconds": duration,
+                    "scale_pos_weight": positive_weight,
+                }
+        manifest = {
+            "parent_run_id": parent.info.run_id,
+            "tracking_uri": uri,
+            "candidates": candidates,
+            "source": metadata,
+        }
+        mlflow.log_dict(manifest, "comparison.json")
+    write_json(output / "comparison.json", manifest)
+    LOGGER.info("MLflow comparison run: %s", manifest["parent_run_id"])
+    return manifest
 
 
 def main() -> None:
@@ -172,11 +140,7 @@ def main() -> None:
     parser.add_argument("--config", type=Path, default=Path("params.yaml"))
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-    try:
-        run(args.config)
-    except (ValueError, OSError, KeyError) as exc:
-        LOGGER.error("Training failed: %s", exc)
-        raise SystemExit(1) from exc
+    run(args.config)
 
 
 if __name__ == "__main__":

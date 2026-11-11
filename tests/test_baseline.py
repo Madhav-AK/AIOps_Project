@@ -4,9 +4,9 @@ import joblib
 import numpy as np
 import pandas as pd
 import pytest
-import yaml
 
 from fraud_detection.data import load_dataset, sample_and_split, training_positive_weight
+from fraud_detection.evaluate import score_model as evaluate
 from fraud_detection.features import (
     INPUT_COLUMNS,
     TARGET,
@@ -14,21 +14,6 @@ from fraud_detection.features import (
     build_model,
     validate_inputs,
 )
-from fraud_detection.train import evaluate, run
-
-
-@pytest.fixture
-def transactions():
-    labels = np.array([0] * 80 + [1] * 20)
-    return pd.DataFrame(
-        {
-            "type": np.where(labels == 1, "TRANSFER", "PAYMENT"),
-            "amount": np.where(labels == 1, 200.0, 20.0),
-            "oldbalanceOrg": np.full(100, 100.0),
-            "oldbalanceDest": np.full(100, 50.0),
-            TARGET: labels,
-        }
-    )
 
 
 def split_config():
@@ -157,27 +142,3 @@ def test_average_precision_uses_scores_not_thresholded_labels(transactions):
     assert result["confusion_matrix"] == [[1, 1], [1, 1]]
     assert result["f1"] == 0.5
     assert result["average_precision"] == pytest.approx(5 / 6)
-
-
-def test_training_entrypoint_creates_loadable_model_and_real_reports(transactions, tmp_path):
-    csv_path = tmp_path / "data.csv"
-    transactions.to_csv(csv_path, index=False)
-    config = {
-        "seed": 42,
-        "data": {"path": str(csv_path), **split_config()},
-        "model": {"n_estimators": 5, "max_depth": 2, "n_jobs": 1},
-        "decision_threshold": 0.5,
-        "outputs": {"artifacts": str(tmp_path / "artifacts"), "reports": str(tmp_path / "reports")},
-    }
-    config_path = tmp_path / "params.yaml"
-    config_path.write_text(yaml.safe_dump(config))
-    metrics = run(config_path)
-    assert set(metrics["validation"]) == {
-        "always_non_fraud",
-        "xgboost_unweighted",
-        "xgboost_weighted",
-    }
-    assert metrics["selected_model"] in {"xgboost_unweighted", "xgboost_weighted"}
-    model = joblib.load(tmp_path / "artifacts/model.joblib")
-    assert model.predict_proba(transactions.loc[:, list(INPUT_COLUMNS)]).shape == (100, 2)
-    assert (tmp_path / "reports/results.json").exists()

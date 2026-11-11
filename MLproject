@@ -1,0 +1,7 @@
+name: transaction-fraud
+python_env: python_env.yaml
+entry_points:
+  train:
+    parameters:
+      config: {type: path, default: params.yaml}
+    command: "python -m fraud_detection.train --config {config}"
