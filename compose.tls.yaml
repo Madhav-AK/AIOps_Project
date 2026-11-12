@@ -1,0 +1,43 @@
+# HTTPS for the user-facing UI and API. This file generated certs
+services:
+  backend:
+    command:
+      - uvicorn
+      - fastapi_app.app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --ssl-keyfile
+      - /certs/key.pem
+      - --ssl-certfile
+      - /certs/cert.pem
+    volumes:
+      - ./certs:/certs:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://127.0.0.1:8000/ready', context=ssl.create_default_context(cafile='/certs/cert.pem'), timeout=4)"]
+
+  frontend:
+    command:
+      - streamlit
+      - run
+      - fastapi_app/frontend.py
+      - --server.address
+      - 0.0.0.0
+      - --server.port
+      - "8501"
+      - --server.headless
+      - "true"
+      - --browser.gatherUsageStats
+      - "false"
+      - --server.sslCertFile
+      - /certs/cert.pem
+      - --server.sslKeyFile
+      - /certs/key.pem
+    environment:
+      BACKEND_URL: https://backend:8000
+      REQUESTS_CA_BUNDLE: /certs/cert.pem
+    volumes:
+      - ./certs:/certs:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://127.0.0.1:8501/_stcore/health', context=ssl.create_default_context(cafile='/certs/cert.pem'), timeout=3)"]

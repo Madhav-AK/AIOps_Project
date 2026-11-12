@@ -1,0 +1,96 @@
+services:
+  mlflow:
+    image: aiops-project:stage3
+    # Build the shared image once; the other services reuse it.
+    build: .
+    command:
+      - mlflow
+      - server
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --workers
+      - "1"
+      - --backend-store-uri
+      - sqlite:///mlflow_storage/tracking.db
+      - --serve-artifacts
+      - --artifacts-destination
+      - mlflow_storage/artifacts
+      - --allowed-hosts
+      - mlflow,mlflow:5000,127.0.0.1,127.0.0.1:5000,localhost,localhost:5000
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - ./mlflow_storage:/app/mlflow_storage
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 15
+
+  model-server:
+    image: aiops-project:stage3
+    environment:
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+    command:
+      - mlflow
+      - models
+      - serve
+      - --model-uri
+      - ${MODEL_URI:?Set MODEL_URI to the selected immutable model version in .env}
+      - --env-manager
+      - local
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8080"
+      - --workers
+      - "1"
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/ping', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 15
+      start_period: 20s
+
+  backend:
+    image: aiops-project:stage3
+    environment:
+      MODEL_SERVER_URL: http://model-server:8080
+      MODEL_URI: ${MODEL_URI:?Set MODEL_URI in .env}
+      DECISION_THRESHOLD: ${DECISION_THRESHOLD:?Set DECISION_THRESHOLD in .env}
+      MLFLOW_PUBLIC_URL: http://127.0.0.1:5000
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # Mount parents so DVC can replace generated directories during reproduction.
+      - ./data:/app/data:ro
+      - ./reports:/app/reports:ro
+    depends_on:
+      model-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=4)"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  frontend:
+    image: aiops-project:stage3
+    command: ["streamlit", "run", "fastapi_app/frontend.py", "--server.address", "0.0.0.0", "--server.port", "8501", "--server.headless", "true", "--browser.gatherUsageStats", "false"]
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "127.0.0.1:8501:8501"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=3)"]
+      interval: 5s
+      timeout: 4s
+      retries: 12
