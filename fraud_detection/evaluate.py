@@ -3,6 +3,7 @@
 import argparse
 import json
 import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -125,6 +126,8 @@ def run(config_path: Path) -> dict:
         "comparison_run_id": comparison["parent_run_id"],
         "registered_model_version": int(registered.version),
     }
+    if "PIPELINE_JOB_ID" in os.environ:
+        report["pipeline_job_id"] = os.environ["PIPELINE_JOB_ID"]
     write_json(Path(config["outputs"]["reports"]) / "results.json", report)
     LOGGER.info(
         "Selected %s; registry version %s; test metrics %s",

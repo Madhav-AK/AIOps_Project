@@ -22,3 +22,8 @@ outputs:
   candidates: artifacts/candidates
   artifacts: artifacts/model
   reports: reports/model
+operations:
+  api_url: http://127.0.0.1:8000
+  ca_bundle: null
+  compose_files:
+    - compose.yaml

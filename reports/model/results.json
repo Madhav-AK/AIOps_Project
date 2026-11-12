@@ -79,6 +79,7 @@
   },
   "selected_model": "xgboost_unweighted",
   "decision_threshold": 0.5,
-  "comparison_run_id": "49c074663c0a41909c05ca611f4ab539",
-  "registered_model_version": 9
+  "comparison_run_id": "5a0c5c361066429497a17c3883cb6bcd",
+  "registered_model_version": 17,
+  "pipeline_job_id": "0122c5220ae440d49a20b5648b0da29a"
 }

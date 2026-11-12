@@ -13,7 +13,7 @@ from streamlit.testing.v1 import AppTest
 def frontend(monkeypatch):
     monkeypatch.setenv("BACKEND_URL", "http://backend.test:8000")
     calls = []
-    behaviour = {"predict_status": 200}
+    behaviour = {"predict_status": 200, "pipeline_status": 200}
     examples = {
         "payment": jsonlib.loads(Path("data/examples/not_flagged.json").read_text()),
         "transfer": jsonlib.loads(Path("data/examples/flag_for_review.json").read_text()),
@@ -28,6 +28,7 @@ def frontend(monkeypatch):
                 "decision_threshold": 0.5,
                 "transaction_types": ["CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"],
                 "mlflow_url": "http://127.0.0.1:5000",
+                "image": "test-image",
             }
         elif path == "/examples":
             payload = examples
@@ -51,13 +52,22 @@ def frontend(monkeypatch):
                 "batches": 4,
                 "splits": {"train": 700, "validation": 150, "test": 150},
                 "test_metrics": {"precision": 0.5, "recall": 0.5, "f1": 0.5},
-                "evaluated_model_version": "8",
+                "evaluated_model_version": 8,
                 "comparison_run_id": "test-run",
             }
+        elif path == "/operations":
+            payload = {"worker_running": False, "busy": False}
+        elif path == "/deployments":
+            payload = {"current": {"model_version": "8"}, "previous": None, "events": []}
+        elif path == "/pipeline/runs":
+            payload = []
         else:
             raise AssertionError(f"Unexpected REST request: {url}")
         response = requests.Response()
-        response.status_code = behaviour["predict_status"] if path == "/predict" else 200
+        response.status_code = {
+            "/predict": behaviour["predict_status"],
+            "/pipeline": behaviour["pipeline_status"],
+        }.get(path, 200)
         response._content = jsonlib.dumps(payload).encode()
         response.url = url
         return response
@@ -117,3 +127,12 @@ def test_missing_backend_configuration_is_visible(monkeypatch):
     app = AppTest.from_file(Path("fastapi_app/frontend.py").resolve()).run()
     assert not app.exception
     assert "not configured" in app.error[0].value
+
+
+def test_pipeline_outputs_being_rebuilt_do_not_hide_operations_controls(frontend):
+    app, _, behaviour = frontend
+    behaviour["pipeline_status"] = 503
+    app.run().radio[0].set_value("Operations").run()
+    assert not app.exception
+    assert any(button.label == "Run pipeline" for button in app.button)
+    assert any("outputs are currently unavailable" in message.value for message in app.info)

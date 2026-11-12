@@ -4,7 +4,9 @@ import argparse
 import json
 import logging
 import os
+import tempfile
 import time
+from importlib.metadata import version
 from pathlib import Path
 
 import joblib
@@ -14,7 +16,13 @@ import pandas as pd
 from mlflow.models import infer_signature
 from sklearn.dummy import DummyClassifier
 
-from fraud_detection.common import read_config, source_metadata, write_json
+from fraud_detection.common import (
+    file_hash,
+    read_config,
+    snapshot_source,
+    source_metadata,
+    write_json,
+)
 from fraud_detection.data import training_positive_weight
 from fraud_detection.evaluate import score_model
 from fraud_detection.features import INPUT_COLUMNS, TARGET, build_model
@@ -41,6 +49,8 @@ def run(config_path: Path) -> dict:
     weight = training_positive_weight(labels)
     metadata = source_metadata(config_path)
     metadata["dataset_sha256"] = preparation["dataset_sha256"]
+    if "TRAINING_IMAGE_ID" in os.environ:
+        metadata["training_image_id"] = os.environ["TRAINING_IMAGE_ID"]
     uri = os.environ["MLFLOW_TRACKING_URI"]
     mlflow.set_tracking_uri(uri)
     example = inputs.head(3).astype({"type": "str"})
@@ -65,8 +75,15 @@ def run(config_path: Path) -> dict:
             }
         )
         mlflow.log_dict(config, "config.json")
+        with tempfile.TemporaryDirectory(prefix="fraud-source-") as temporary:
+            snapshot = Path(temporary) / "source_snapshot.zip"
+            snapshot_source(snapshot)
+            metadata["source_snapshot_sha256"] = file_hash(snapshot)
+            mlflow.log_artifact(str(snapshot))
         mlflow.log_dict(metadata, "lineage.json")
         mlflow.log_dict(preparation, "data_preparation.json")
+        if "PIPELINE_JOB_ID" in os.environ:
+            mlflow.set_tag("pipeline_job_id", os.environ["PIPELINE_JOB_ID"])
         for name, positive_weight in [
             ("always_non_fraud", None),
             ("xgboost_unweighted", 1.0),
@@ -114,7 +131,22 @@ def run(config_path: Path) -> dict:
                     code_paths=["fraud_detection"],
                     signature=signature,
                     input_example=example,
-                    pip_requirements=str(Path("requirements.txt").resolve()),
+                    pip_requirements=[
+                        f"{name}=={version(name)}"
+                        for name in (
+                            "mlflow",
+                            "scikit-learn",
+                            "xgboost-cpu",
+                            "numpy",
+                            "pandas",
+                            "scipy",
+                            "joblib",
+                            "cloudpickle",
+                            # MLflow 3.6 serving requires the compatible HTTP stack.
+                            "fastapi",
+                            "starlette",
+                        )
+                    ],
                 )
                 candidates[name] = {
                     "run_id": child.info.run_id,
@@ -129,6 +161,8 @@ def run(config_path: Path) -> dict:
             "candidates": candidates,
             "source": metadata,
         }
+        if "PIPELINE_JOB_ID" in os.environ:
+            manifest["pipeline_job_id"] = os.environ["PIPELINE_JOB_ID"]
         mlflow.log_dict(manifest, "comparison.json")
     write_json(output / "comparison.json", manifest)
     LOGGER.info("MLflow comparison run: %s", manifest["parent_run_id"])

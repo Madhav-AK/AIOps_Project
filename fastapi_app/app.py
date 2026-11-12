@@ -17,6 +17,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from fastapi_app import jobs
+
 LOGGER = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[1]
 TransactionType = Literal["CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"]
@@ -39,6 +41,16 @@ class Prediction(BaseModel):
     request_id: str
 
 
+class PipelineRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: Literal["reproduce", "retrain", "ci", "release"]
+
+
+class DeploymentRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    version: int = Field(gt=0)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Read required settings at startup; close the model-server client on shutdown."""
@@ -57,7 +69,9 @@ async def lifespan(app: FastAPI):
         "input_fields": list(Transaction.model_fields),
         "transaction_types": list(get_args(TransactionType)),
         "mlflow_url": os.environ["MLFLOW_PUBLIC_URL"],
+        "image": os.environ["APP_IMAGE"],
     }
+    app.state.operations = Path(os.environ["OPERATIONS_DIR"])
     app.state.client = httpx.Client(base_url=os.environ["MODEL_SERVER_URL"], timeout=5.0)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
@@ -134,7 +148,7 @@ def examples() -> dict:
 
 @app.get("/pipeline")
 def pipeline_overview() -> dict:
-    """Expose recorded pipeline evidence; job control/history is added in stage 4."""
+    """Expose recorded preparation and evaluation evidence."""
     try:
         prepared = json.loads((ROOT / "data/prepared/preparation.json").read_text())
         results = json.loads((ROOT / "reports/model/results.json").read_text())
@@ -154,6 +168,84 @@ def pipeline_overview() -> dict:
     except (OSError, ValueError, KeyError) as exc:
         LOGGER.exception("Recorded pipeline results could not be read")
         raise HTTPException(503, "Recorded pipeline results are unavailable.") from exc
+
+
+def submit_operation(request: Request, kind: str, arguments: dict) -> dict:
+    try:
+        return jobs.submit(request.app.state.operations, kind, arguments, queued=True)
+    except jobs.WorkerUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    except jobs.BusyError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.get("/operations")
+def operations_status(request: Request) -> dict:
+    directory = request.app.state.operations
+    active = [job for job in jobs.list_jobs(directory) if job["state"] in ("queued", "running")]
+    return {"worker_running": jobs.worker_available(directory), "busy": bool(active)}
+
+
+@app.post("/pipeline/runs", status_code=202)
+def start_pipeline(payload: PipelineRequest, request: Request) -> dict:
+    return submit_operation(request, payload.action, {})
+
+
+@app.get("/pipeline/runs")
+def pipeline_runs(request: Request) -> list[dict]:
+    return jobs.list_jobs(request.app.state.operations)[:20]
+
+
+@app.get("/pipeline/runs/{job_id}")
+def pipeline_run(job_id: uuid.UUID, request: Request) -> dict:
+    directory = request.app.state.operations
+    try:
+        job = jobs.get_job(directory, job_id.hex)
+    except FileNotFoundError as exc:
+        raise HTTPException(404, "Unknown operations job.") from exc
+    path = jobs.log_path(directory, job_id.hex)
+    # A queued job legitimately has no log until the worker starts it.
+    if path.exists():
+        with path.open("rb") as log:
+            log.seek(max(0, path.stat().st_size - 16000))
+            job["log_tail"] = log.read().decode("utf-8", errors="replace")
+    else:
+        job["log_tail"] = "The job has not produced a log yet."
+    return job
+
+
+@app.get("/deployments")
+def deployments(request: Request) -> dict:
+    try:
+        state = jobs.read(request.app.state.operations / "deployment.json")
+    except FileNotFoundError as exc:
+        raise HTTPException(503, "Record the running deployment baseline first.") from exc
+    # Keep saved environment file contents private to the local release process.
+    fields = (
+        "model_uri",
+        "model_version",
+        "decision_threshold",
+        "image",
+        "image_id",
+        "deployed_at",
+    )
+    return {
+        "current": {key: state["current"][key] for key in fields},
+        "previous": None
+        if state["previous"] is None
+        else {key: state["previous"][key] for key in fields},
+        "events": state["events"],
+    }
+
+
+@app.post("/deployments", status_code=202)
+def start_deployment(payload: DeploymentRequest, request: Request) -> dict:
+    return submit_operation(request, "deploy", {"version": payload.version, "image": None})
+
+
+@app.post("/deployments/rollback", status_code=202)
+def start_rollback(request: Request) -> dict:
+    return submit_operation(request, "rollback", {})
 
 
 def fraud_score(payload: dict) -> float:

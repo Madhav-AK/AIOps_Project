@@ -13,8 +13,8 @@ stages:
       size: 724
     - path: fraud_detection/common.py
       hash: md5
-      md5: 6b0ae66fb2ba7796099b70cade733463
-      size: 2623
+      md5: b544027317d5f17fbde0ad74a8cea36b
+      size: 2978
     - path: fraud_detection/data.py
       hash: md5
       md5: a42aa46605ea9ec3c2376c00ef4838a5
@@ -25,8 +25,8 @@ stages:
       size: 3283
     - path: fraud_detection/prepare.py
       hash: md5
-      md5: 24f9aa37c8f3c4085185f42a8d02a386
-      size: 3996
+      md5: b7762f38fbebcae00506ac0988b0a4d8
+      size: 4103
     - path: requirements.txt
       hash: md5
       md5: 43e7e72e1e765230751d7d877e243f94
@@ -46,22 +46,24 @@ stages:
     outs:
     - path: data/prepared
       hash: md5
-      md5: 2ec9130b31889ca71c79ae4702302118.dir
-      size: 12092001
+      md5: e32b1384f1fd1f3db4d9978dd8bdaa2a.dir
+      size: 12092057
       nfiles: 4
   train:
-    cmd: MLFLOW_TRACKING_URI=http://127.0.0.1:5000 mlflow run . --env-manager 
-      local --entry-point train --experiment-name transaction-fraud -P 
-      config=params.yaml
+    cmd: python -m scripts.train_in_docker
     deps:
+    - path: Dockerfile
+      hash: md5
+      md5: 00752c14be5b08ac450d2c08427fb6df
+      size: 512
     - path: MLproject
       hash: md5
       md5: 40850fdc6978ff5ccc0311072038ed7b
       size: 205
     - path: data/prepared/preparation.json
       hash: md5
-      md5: 6300e49f8be188c842d8844d8486e351
-      size: 3485
+      md5: 35dfdf30dd228ca4ddf7809c8bd6b018
+      size: 3541
     - path: data/prepared/train.parquet
       hash: md5
       md5: 259e0680e21fe8ee05e9f876ccb3bb8d
@@ -72,24 +74,24 @@ stages:
       size: 1987603
     - path: fraud_detection/common.py
       hash: md5
-      md5: 6b0ae66fb2ba7796099b70cade733463
-      size: 2623
+      md5: b544027317d5f17fbde0ad74a8cea36b
+      size: 2978
     - path: fraud_detection/data.py
       hash: md5
       md5: a42aa46605ea9ec3c2376c00ef4838a5
       size: 3465
     - path: fraud_detection/evaluate.py
       hash: md5
-      md5: f3421cb1e0eaf965bcfeb75fbd10ba10
-      size: 5713
+      md5: 173fc72a7601a0370f9416b9dfbaaffe
+      size: 5829
     - path: fraud_detection/features.py
       hash: md5
       md5: 31fdce634a41b2d85392dbee4c9e3cf5
       size: 3283
     - path: fraud_detection/train.py
       hash: md5
-      md5: c01e88a5259b72e1c93db4fb84254d10
-      size: 6076
+      md5: 1b106510858e68559d275da2852b91c2
+      size: 7413
     - path: python_env.yaml
       hash: md5
       md5: 357880fd16f9744b4bafdb2e9894a4e2
@@ -98,6 +100,10 @@ stages:
       hash: md5
       md5: 43e7e72e1e765230751d7d877e243f94
       size: 2993
+    - path: scripts/train_in_docker.py
+      hash: md5
+      md5: 4057ed019bd0207a28e328edc40ba70f
+      size: 1431
     params:
       params.yaml:
         decision_threshold: 0.5
@@ -115,16 +121,16 @@ stages:
     outs:
     - path: artifacts/candidates
       hash: md5
-      md5: e50b63056ce9158d8c140c9792152a0e.dir
-      size: 219280
+      md5: 7b2c1255c0acb86bc0fce2231318775d.dir
+      size: 219701
       nfiles: 4
   evaluate:
     cmd: python -m fraud_detection.evaluate
     deps:
     - path: artifacts/candidates
       hash: md5
-      md5: e50b63056ce9158d8c140c9792152a0e.dir
-      size: 219280
+      md5: 7b2c1255c0acb86bc0fce2231318775d.dir
+      size: 219701
       nfiles: 4
     - path: data/prepared/test.parquet
       hash: md5
@@ -132,12 +138,12 @@ stages:
       size: 1987540
     - path: fraud_detection/common.py
       hash: md5
-      md5: 6b0ae66fb2ba7796099b70cade733463
-      size: 2623
+      md5: b544027317d5f17fbde0ad74a8cea36b
+      size: 2978
     - path: fraud_detection/evaluate.py
       hash: md5
-      md5: f3421cb1e0eaf965bcfeb75fbd10ba10
-      size: 5713
+      md5: 173fc72a7601a0370f9416b9dfbaaffe
+      size: 5829
     - path: fraud_detection/features.py
       hash: md5
       md5: 31fdce634a41b2d85392dbee4c9e3cf5
@@ -155,10 +161,10 @@ stages:
     outs:
     - path: artifacts/model
       hash: md5
-      md5: ed41394087a57071e9ee7f2a8ae321be.dir
-      size: 108029
+      md5: e40d50039e1dfee529a2fdc340943533.dir
+      size: 108031
       nfiles: 2
     - path: reports/model/results.json
       hash: md5
-      md5: 1d75d8f1eaa1c9e345d6a561f6d0da04
-      size: 1690
+      md5: c2cbad58b4b73422552c73398a228151
+      size: 1748

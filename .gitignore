@@ -229,3 +229,4 @@ __marimo__/
 /mlflow.db*
 /mlflow_storage/
 /certs/
+/operations/

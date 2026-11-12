@@ -47,21 +47,16 @@ def test_selection_uses_validation_and_has_deterministic_ties():
     assert select_candidate(candidates) == "xgboost_unweighted"
 
 
-def test_container_lineage_can_be_supplied_without_git(tmp_path, monkeypatch):
+def test_lineage_requires_the_actual_git_checkout(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setenv("SOURCE_GIT_COMMIT", "a" * 40)
-    monkeypatch.setenv("SOURCE_WORKTREE_DIRTY", "false")
-    result = source_metadata(Path("params.yaml"))
-    assert result["git_commit"] == "a" * 40
-    assert result["source_worktree_dirty"] is False
+    with pytest.raises(ValueError, match="project Git checkout"):
+        source_metadata(Path("params.yaml"))
 
 
 def test_tracking_registration_and_fresh_process_model_load(transactions, tmp_path, monkeypatch):
     monkeypatch.delenv("MLFLOW_RUN_ID", raising=False)
     monkeypatch.delenv("MLFLOW_TRACKING_URI", raising=False)
     monkeypatch.setenv("MLFLOW_ENABLE_TELEMETRY", "false")
-    monkeypatch.setenv("SOURCE_GIT_COMMIT", "unit-test-source")
-    monkeypatch.setenv("SOURCE_WORKTREE_DIRTY", "true")
     prepared = tmp_path / "prepared"
     prepared.mkdir()
     raw = tmp_path / "raw.csv"
@@ -103,6 +98,12 @@ def test_tracking_registration_and_fresh_process_model_load(transactions, tmp_pa
     monkeypatch.setenv("MLFLOW_EXPERIMENT_ID", experiment_id)
     comparison = train_run(config_path)
     assert len(comparison["candidates"]) == 3
+    snapshot = Path(
+        mlflow.MlflowClient().download_artifacts(
+            comparison["parent_run_id"], "source_snapshot.zip", str(tmp_path / "download")
+        )
+    )
+    assert file_hash(snapshot) == comparison["source"]["source_snapshot_sha256"]
     report = evaluate_run(config_path)
     assert report["test"]["rows"] == len(splits["test"])
     info = json.loads((tmp_path / "model/model_info.json").read_text())
@@ -113,6 +114,11 @@ def test_tracking_registration_and_fresh_process_model_load(transactions, tmp_pa
     signature = mlflow.models.get_model_info(info["model_uri"]).signature
     assert set(signature.inputs.input_names()) == set(INPUT_COLUMNS)
     assert packaged.metadata.metadata["decision_threshold"] == 0.5
+    package = Path(mlflow.artifacts.download_artifacts(artifact_uri=info["model_uri"]))
+    dependencies = (package / "requirements.txt").read_text()
+    assert "xgboost-cpu==" in dependencies
+    assert "streamlit" not in dependencies
+    assert "dvc==" not in dependencies
     # New interpreter, outside the source tree: only the packaged code can satisfy imports.
     env = os.environ.copy()
     env.pop("PYTHONPATH", None)
@@ -145,17 +151,47 @@ def test_training_rejects_missing_project_context(tmp_path, monkeypatch, missing
         train_run(tmp_path / "params.yaml")
 
 
-@pytest.mark.parametrize("missing", ["SOURCE_GIT_COMMIT", "SOURCE_WORKTREE_DIRTY"])
-def test_lineage_rejects_partial_container_configuration(tmp_path, monkeypatch, missing):
-    monkeypatch.setenv("SOURCE_GIT_COMMIT", "a" * 40)
-    monkeypatch.setenv("SOURCE_WORKTREE_DIRTY", "false")
-    monkeypatch.delenv(missing)
-    with pytest.raises(ValueError, match="Supply both"):
-        source_metadata(tmp_path / "params.yaml")
+def test_source_snapshot_can_restore_tracked_and_untracked_draft_changes(tmp_path, monkeypatch):
+    import zipfile
+
+    from fraud_detection.common import snapshot_source
+
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(["git", "init", "-q"], check=True)
+    (tmp_path / "tracked.py").write_text("before\n")
+    (tmp_path / ".gitignore").write_text(".env\ndata.csv\n")
+    subprocess.run(["git", "add", "."], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.com",
+            "commit",
+            "-qm",
+            "Fixture source",
+        ],
+        check=True,
+    )
+    (tmp_path / "tracked.py").write_text("after\n")
+    (tmp_path / "helper.py").write_text("new source\n")
+    (tmp_path / ".env").write_text("secret")
+    (tmp_path / "data.csv").write_text("large dataset")
+    destination = tmp_path.parent / f"{tmp_path.name}-source.zip"
+    snapshot_source(destination)
+    with zipfile.ZipFile(destination) as archive:
+        assert set(archive.namelist()) == {"working_tree.patch", "untracked/helper.py"}
+        patch = archive.read("working_tree.patch")
+        assert archive.read("untracked/helper.py") == b"new source\n"
+    subprocess.run(["git", "checkout", "--", "tracked.py"], check=True)
+    subprocess.run(["git", "apply", "-"], input=patch, check=True)
+    assert (tmp_path / "tracked.py").read_text() == "after\n"
 
 
-def test_lineage_rejects_unknown_source_state(tmp_path, monkeypatch):
-    monkeypatch.setenv("SOURCE_GIT_COMMIT", "a" * 40)
-    monkeypatch.setenv("SOURCE_WORKTREE_DIRTY", "unknown")
-    with pytest.raises(ValueError, match="must be true or false"):
-        source_metadata(tmp_path / "params.yaml")
+def test_source_hash_keys_do_not_depend_on_container_mount_path():
+    relative = source_metadata(Path("params.yaml"))["source_files_sha256"]
+    absolute = source_metadata(Path("params.yaml").resolve())["source_files_sha256"]
+    assert relative == absolute
+    assert "params.yaml" in absolute
+    assert "scripts/release.py" not in absolute

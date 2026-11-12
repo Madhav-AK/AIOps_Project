@@ -13,6 +13,7 @@ mlflow_storage
 mlflow.db*
 .env
 certs
+operations
 **/__pycache__
 **/*.pyc
 .pytest_cache

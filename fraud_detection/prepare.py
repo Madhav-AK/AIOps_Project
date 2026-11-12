@@ -88,6 +88,8 @@ def run(config_path: Path) -> dict:
         "rows_per_second": len(frame) / elapsed,
         "throughput_scope": "CSV -> Ray -> split -> Parquet; includes startup",
     }
+    if "PIPELINE_JOB_ID" in os.environ:
+        summary["pipeline_job_id"] = os.environ["PIPELINE_JOB_ID"]
     write_json(output / "preparation.json", summary)
     LOGGER.info(
         "Prepared %s rows in %.2fs (%.0f rows/s), %s Ray batches",

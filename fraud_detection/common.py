@@ -2,9 +2,9 @@
 
 import hashlib
 import json
-import os
 import platform
 import subprocess
+import zipfile
 from importlib.metadata import version
 from pathlib import Path
 
@@ -26,37 +26,37 @@ def file_hash(path: Path) -> str:
 
 
 def source_metadata(config_path: Path) -> dict:
-    """Record exact source identity; containers can receive it explicitly."""
+    """Record source identity from the Git checkout mounted into training."""
+    config_path = config_path.resolve()
+    if config_path.is_relative_to(Path.cwd()):
+        config_path = config_path.relative_to(Path.cwd())
     paths = [
         *sorted(Path("fraud_detection").glob("*.py")),
-        *sorted(Path("scripts").glob("*.py")),
+        Path("scripts/download_data.py"),
+        Path("scripts/train_in_docker.py"),
+        Path("Dockerfile"),
         config_path,
         Path("requirements.txt"),
         Path("MLproject"),
         Path("python_env.yaml"),
         Path("dvc.yaml"),
     ]
-    source_keys = ("SOURCE_GIT_COMMIT", "SOURCE_WORKTREE_DIRTY")
-    if any(key in os.environ for key in source_keys):
-        if not all(os.environ.get(key) for key in source_keys):
-            raise ValueError("Supply both SOURCE_GIT_COMMIT and SOURCE_WORKTREE_DIRTY explicitly.")
-        commit = os.environ["SOURCE_GIT_COMMIT"]
-        dirty_value = os.environ["SOURCE_WORKTREE_DIRTY"]
-        if dirty_value not in ("true", "false"):
-            raise ValueError("SOURCE_WORKTREE_DIRTY must be true or false.")
-        dirty = dirty_value == "true"
-    else:
-        try:
-            commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-            dirty = bool(
-                subprocess.check_output(
-                    ["git", "status", "--porcelain", "--", *map(str, paths)], text=True
-                ).strip()
-            )
-        except (OSError, subprocess.CalledProcessError) as exc:
-            raise ValueError(
-                "Outside a Git checkout, supply SOURCE_GIT_COMMIT and SOURCE_WORKTREE_DIRTY."
-            ) from exc
+    try:
+        commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+        dirty = bool(
+            subprocess.check_output(
+                [
+                    "git",
+                    "status",
+                    "--porcelain",
+                    "--",
+                    *[str(p) for p in paths if not p.is_absolute()],
+                ],
+                text=True,
+            ).strip()
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise ValueError("Run training from the project Git checkout.") from exc
     return {
         "git_commit": commit,
         "source_worktree_dirty": dirty,
@@ -76,3 +76,18 @@ def source_metadata(config_path: Path) -> dict:
             ]
         },
     }
+
+
+def snapshot_source(path: Path) -> None:
+    """Save draft changes on top of the recorded Git commit; ignored data stays in DVC."""
+    patch = subprocess.check_output(["git", "diff", "HEAD", "--binary"])
+    untracked = (
+        subprocess.check_output(["git", "ls-files", "--others", "--exclude-standard", "-z"])
+        .decode()
+        .split("\0")
+    )
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("working_tree.patch", patch)
+        for name in untracked:
+            if name and Path(name).is_file():
+                archive.write(name, "untracked/" + name)

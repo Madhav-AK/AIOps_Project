@@ -5,3 +5,4 @@ mlartifacts/
 mlflow.db*
 mlflow_storage/
 certs/
+operations/

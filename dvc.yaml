@@ -15,10 +15,7 @@ stages:
     outs:
       - data/prepared
   train:
-    cmd: >-
-      MLFLOW_TRACKING_URI=${tracking.uri}
-      mlflow run . --env-manager local --entry-point train
-      --experiment-name ${tracking.experiment} -P config=params.yaml
+    cmd: python -m scripts.train_in_docker
     deps:
       - data/prepared/train.parquet
       - data/prepared/validation.parquet
@@ -28,6 +25,8 @@ stages:
       - fraud_detection/features.py
       - fraud_detection/common.py
       - fraud_detection/data.py
+      - scripts/train_in_docker.py
+      - Dockerfile
       - MLproject
       - python_env.yaml
       - requirements.txt
