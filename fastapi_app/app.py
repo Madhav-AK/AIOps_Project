@@ -14,10 +14,12 @@ from typing import Literal, get_args
 import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, ConfigDict, Field
 
 from fastapi_app import jobs
+from fastapi_app.monitoring import Monitoring
 
 LOGGER = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[1]
@@ -72,6 +74,7 @@ async def lifespan(app: FastAPI):
         "image": os.environ["APP_IMAGE"],
     }
     app.state.operations = Path(os.environ["OPERATIONS_DIR"])
+    app.state.monitoring = Monitoring(model_uri, app.state.operations)
     app.state.client = httpx.Client(base_url=os.environ["MODEL_SERVER_URL"], timeout=5.0)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
     try:
@@ -95,7 +98,26 @@ async def log_request(request: Request, call_next):
     """Attach one request ID and record its route, status and duration."""
     request.state.request_id = uuid.uuid4().hex
     started = time.perf_counter()
-    response = await call_next(request)
+    try:
+        response = await call_next(request)
+    except Exception:
+        request.app.state.monitoring.observe_request(
+            request.method,
+            "unhandled",
+            500,
+            request.headers.get("X-Client"),
+            time.perf_counter() - started,
+        )
+        LOGGER.exception("Unhandled API error; request_id=%s", request.state.request_id)
+        raise
+    route = request.scope["route"].path if "route" in request.scope else "unmatched"
+    request.app.state.monitoring.observe_request(
+        request.method,
+        route,
+        response.status_code,
+        request.headers.get("X-Client"),
+        time.perf_counter() - started,
+    )
     response.headers["X-Request-ID"] = request.state.request_id
     LOGGER.info(
         "request_id=%s method=%s path=%s status=%s duration_ms=%.2f",
@@ -106,6 +128,19 @@ async def log_request(request: Request, call_next):
         (time.perf_counter() - started) * 1000,
     )
     return response
+
+
+@app.get("/metrics", include_in_schema=False)
+def metrics(request: Request):
+    request.app.state.monitoring.refresh()
+    return Response(
+        generate_latest(request.app.state.monitoring.registry), media_type=CONTENT_TYPE_LATEST
+    )
+
+
+@app.get("/monitoring")
+def monitoring_status(request: Request) -> dict:
+    return request.app.state.monitoring.summary()
 
 
 @app.get("/health")
@@ -154,6 +189,8 @@ def pipeline_overview() -> dict:
         results = json.loads((ROOT / "reports/model/results.json").read_text())
         return {
             "rows": prepared["source"]["rows"],
+            "training_rows": results["training_rows"],
+            "labelled_batch": results["labelled_batch"],
             "fraud_rows": prepared["source"]["class_counts"]["1"],
             "preparation_seconds": prepared["total_seconds"],
             "rows_per_second": prepared["rows_per_second"],
@@ -267,6 +304,7 @@ def fraud_score(payload: dict) -> float:
 
 @app.post("/predict", response_model=Prediction)
 def predict(transaction: Transaction, request: Request) -> Prediction:
+    started = time.perf_counter()
     try:
         response = request.app.state.client.post(
             "/invocations", json={"dataframe_records": [transaction.model_dump()]}
@@ -282,9 +320,13 @@ def predict(transaction: Transaction, request: Request) -> Prediction:
     except (httpx.HTTPStatusError, ValueError, KeyError, TypeError) as exc:
         LOGGER.exception("Invalid model response; request_id=%s", request.state.request_id)
         raise HTTPException(502, "Prediction service returned an invalid response.") from exc
+    finally:
+        request.app.state.monitoring.model_latency.observe(time.perf_counter() - started)
     metadata = request.app.state.model
+    label = "Flag for review" if score >= metadata["decision_threshold"] else "Not flagged"
+    request.app.state.monitoring.observe_prediction(transaction.amount, score, label)
     return Prediction(
-        label="Flag for review" if score >= metadata["decision_threshold"] else "Not flagged",
+        label=label,
         score=score,
         decision_threshold=metadata["decision_threshold"],
         model_version=metadata["version"],

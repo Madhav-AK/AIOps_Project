@@ -23,7 +23,8 @@ from fraud_detection.common import (
     source_metadata,
     write_json,
 )
-from fraud_detection.data import training_positive_weight
+from fraud_detection.data import training_positive_weight, validate_labelled_batch
+from fraud_detection.drift import amount_reference
 from fraud_detection.evaluate import score_model
 from fraud_detection.features import INPUT_COLUMNS, TARGET, build_model
 
@@ -45,10 +46,26 @@ def run(config_path: Path) -> dict:
     preparation = json.loads((prepared / "preparation.json").read_text())
     output = Path(config["outputs"]["candidates"])
     output.mkdir(parents=True, exist_ok=True)
+    maintenance = config["maintenance"]
+    batch_metadata = {"included": maintenance["include_labelled_batch"]}
+    if maintenance["include_labelled_batch"]:
+        batch_path = Path(maintenance["labelled_batch"])
+        batch = pd.read_parquet(batch_path)
+        test_indices = pd.read_parquet(prepared / "test.parquet", columns=[]).index
+        validate_labelled_batch(batch, train.index.union(validation.index).union(test_indices))
+        train = pd.concat([train, batch])
+        batch_metadata.update(
+            rows=len(batch),
+            fraud_rows=int(batch[TARGET].sum()),
+            sha256=file_hash(batch_path),
+            path=str(batch_path),
+        )
     inputs, labels = train.loc[:, list(INPUT_COLUMNS)], train[TARGET]
     weight = training_positive_weight(labels)
     metadata = source_metadata(config_path)
     metadata["dataset_sha256"] = preparation["dataset_sha256"]
+    metadata["labelled_batch"] = batch_metadata
+    metadata["training_rows"] = len(train)
     if "TRAINING_IMAGE_ID" in os.environ:
         metadata["training_image_id"] = os.environ["TRAINING_IMAGE_ID"]
     uri = os.environ["MLFLOW_TRACKING_URI"]
@@ -74,6 +91,11 @@ def run(config_path: Path) -> dict:
                 **{f"model.{k}": v for k, v in config["model"].items()},
             }
         )
+        reference = amount_reference(train["amount"])
+        reference["comparison_run_id"] = parent.info.run_id
+        reference["dataset_sha256"] = preparation["dataset_sha256"]
+        reference["labelled_batch"] = batch_metadata
+        mlflow.log_dict(reference, "amount_reference.json")
         mlflow.log_dict(config, "config.json")
         with tempfile.TemporaryDirectory(prefix="fraud-source-") as temporary:
             snapshot = Path(temporary) / "source_snapshot.zip"

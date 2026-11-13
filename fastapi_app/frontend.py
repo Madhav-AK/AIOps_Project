@@ -20,7 +20,9 @@ BACKEND_URL = os.environ["BACKEND_URL"].rstrip("/")
 
 def api(method: str, path: str, payload=None):
     """Call the configured backend; failed requests remain errors."""
-    response = requests.request(method, f"{BACKEND_URL}{path}", json=payload, timeout=8)
+    response = requests.request(
+        method, f"{BACKEND_URL}{path}", json=payload, timeout=8, headers={"X-Client": "frontend"}
+    )
     response.raise_for_status()
     return response.json()
 
@@ -139,6 +141,36 @@ else:
         st.caption(f"Application image: {deployed['image']}")
         st.link_button("Open MLflow", deployed["mlflow_url"])
         st.caption("Status and logs refresh every two seconds.")
+
+        with st.expander("Monitoring", expanded=True):
+            try:
+                observed = api("GET", "/monitoring")
+            except (requests.RequestException, ValueError):
+                st.warning("Monitoring information is unavailable.")
+            else:
+                st.link_button("Open Grafana", observed["grafana_url"])
+                st.link_button("Open alerts", observed["prometheus_url"])
+                st.caption(f"Drift reference: {observed['reference_rows']:,} rows from training.")
+                psi = observed["amount_psi"]
+                st.write(f"Amount window: {observed['window_count']}/{observed['window_size']}")
+                if psi is None:
+                    st.info(
+                        f"Collect {observed['minimum_window']} valid predictions to compute drift."
+                    )
+                elif psi > observed["drift_threshold"]:
+                    st.warning(f"Amount drift detected: PSI {psi:.3f}.")
+                else:
+                    st.write(f"Amount PSI: {psi:.3f}; threshold {observed['drift_threshold']}.")
+                st.caption(
+                    "Input drift does not prove model quality has fallen. "
+                    "Replay labels are evaluated separately."
+                )
+                replay = observed["labelled_replay"]
+                if replay is not None:
+                    st.write(
+                        f"Last labelled replay: {replay['rows']} rows for {replay['model_uri']}; "
+                        f"F1 {replay['f1']:.3f}."
+                    )
 
         st.subheader("Pipeline controls")
         if not status["worker_running"]:

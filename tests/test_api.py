@@ -12,7 +12,7 @@ VALID = {"type": "TRANSFER", "amount": 100.0, "oldbalanceOrg": 100.0, "oldbalanc
 
 
 @pytest.fixture
-def api_client(monkeypatch, tmp_path):
+def api_client(monkeypatch, tmp_path, monitoring_environment):
     monkeypatch.setenv("MODEL_URI", "models:/transaction-fraud/8")
     monkeypatch.setenv("DECISION_THRESHOLD", "0.5")
     monkeypatch.setenv("MODEL_SERVER_URL", "http://model.test:8080")

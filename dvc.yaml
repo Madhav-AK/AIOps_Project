@@ -20,7 +20,10 @@ stages:
       - data/prepared/train.parquet
       - data/prepared/validation.parquet
       - data/prepared/preparation.json
+      - data/prepared/test.parquet
+      - ${maintenance.labelled_batch}
       - fraud_detection/train.py
+      - fraud_detection/drift.py
       - fraud_detection/evaluate.py
       - fraud_detection/features.py
       - fraud_detection/common.py
@@ -36,6 +39,7 @@ stages:
       - decision_threshold
       - tracking
       - outputs.candidates
+      - maintenance
     outs:
       - artifacts/candidates
   evaluate:

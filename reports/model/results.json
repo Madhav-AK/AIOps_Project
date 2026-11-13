@@ -1,4 +1,12 @@
 {
+  "training_rows": 370000,
+  "labelled_batch": {
+    "included": true,
+    "rows": 20000,
+    "fraud_rows": 75,
+    "sha256": "d7c8d4439ed1b334d18ec0247a3b59696db2602522d360b49d3de9af90090859",
+    "path": "data/incoming/labelled_batch.parquet"
+  },
   "validation": {
     "always_non_fraud": {
       "precision": 0.0,
@@ -20,66 +28,66 @@
       "rows": 75000
     },
     "xgboost_unweighted": {
-      "precision": 0.946236559139785,
-      "recall": 0.9072164948453608,
-      "f1": 0.9263157894736842,
-      "average_precision": 0.986181374755751,
+      "precision": 0.8807339449541285,
+      "recall": 0.9896907216494846,
+      "f1": 0.9320388349514563,
+      "average_precision": 0.9855411790103352,
       "accuracy": 0.9998133333333333,
       "confusion_matrix": [
         [
-          74898,
-          5
+          74890,
+          13
         ],
         [
-          9,
-          88
+          1,
+          96
         ]
       ],
-      "flagged_count": 93,
+      "flagged_count": 109,
       "rows": 75000
     },
     "xgboost_weighted": {
-      "precision": 0.8016528925619835,
+      "precision": 0.7404580152671756,
       "recall": 1.0,
-      "f1": 0.8899082568807339,
-      "average_precision": 0.9826838079570319,
-      "accuracy": 0.99968,
+      "f1": 0.8508771929824561,
+      "average_precision": 0.9822209458348884,
+      "accuracy": 0.9995466666666667,
       "confusion_matrix": [
         [
-          74879,
-          24
+          74869,
+          34
         ],
         [
           0,
           97
         ]
       ],
-      "flagged_count": 121,
+      "flagged_count": 131,
       "rows": 75000
     }
   },
   "test": {
-    "precision": 0.9560439560439561,
-    "recall": 0.8969072164948454,
-    "f1": 0.925531914893617,
-    "average_precision": 0.981909257248943,
-    "accuracy": 0.9998133333333333,
+    "precision": 0.9306930693069307,
+    "recall": 0.9690721649484536,
+    "f1": 0.9494949494949495,
+    "average_precision": 0.9883186343922433,
+    "accuracy": 0.9998666666666667,
     "confusion_matrix": [
       [
-        74899,
-        4
+        74896,
+        7
       ],
       [
-        10,
-        87
+        3,
+        94
       ]
     ],
-    "flagged_count": 91,
+    "flagged_count": 101,
     "rows": 75000
   },
   "selected_model": "xgboost_unweighted",
   "decision_threshold": 0.5,
-  "comparison_run_id": "5a0c5c361066429497a17c3883cb6bcd",
-  "registered_model_version": 17,
-  "pipeline_job_id": "0122c5220ae440d49a20b5648b0da29a"
+  "comparison_run_id": "b174e6cc36c44b4a851601a8288815ce",
+  "registered_model_version": 20,
+  "pipeline_job_id": "e6d826f071394a329bff8ddd7d2e20db"
 }

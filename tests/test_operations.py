@@ -14,7 +14,7 @@ from scripts import release, run_operations
 
 
 @pytest.fixture
-def operations_api(monkeypatch, tmp_path):
+def operations_api(monkeypatch, tmp_path, monitoring_environment):
     monkeypatch.setenv("MODEL_URI", "models:/transaction-fraud/9")
     monkeypatch.setenv("DECISION_THRESHOLD", "0.5")
     monkeypatch.setenv("MODEL_SERVER_URL", "http://unused.test")

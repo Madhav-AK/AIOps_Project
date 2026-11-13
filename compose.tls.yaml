@@ -12,6 +12,9 @@ services:
       - /certs/key.pem
       - --ssl-certfile
       - /certs/cert.pem
+    environment:
+      FRONTEND_HEALTH_URL: https://frontend:8501/_stcore/health
+      REQUESTS_CA_BUNDLE: /certs/cert.pem
     volumes:
       - ./certs:/certs:ro
     healthcheck:
@@ -41,3 +44,8 @@ services:
       - ./certs:/certs:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import ssl, urllib.request; urllib.request.urlopen('https://127.0.0.1:8501/_stcore/health', context=ssl.create_default_context(cafile='/certs/cert.pem'), timeout=3)"]
+
+  prometheus:
+    volumes:
+      - ./monitoring/prometheus.tls.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./certs:/certs:ro

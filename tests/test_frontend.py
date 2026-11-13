@@ -19,7 +19,7 @@ def frontend(monkeypatch):
         "transfer": jsonlib.loads(Path("data/examples/flag_for_review.json").read_text()),
     }
 
-    def request(method, url, json=None, timeout=None):
+    def request(method, url, json=None, timeout=None, headers=None):
         path = urlparse(url).path
         if path == "/model":
             payload = {
@@ -29,6 +29,19 @@ def frontend(monkeypatch):
                 "transaction_types": ["CASH_IN", "CASH_OUT", "DEBIT", "PAYMENT", "TRANSFER"],
                 "mlflow_url": "http://127.0.0.1:5000",
                 "image": "test-image",
+            }
+        elif path == "/monitoring":
+            payload = {
+                "model_uri": "models:/transaction-fraud/8",
+                "window_count": 0,
+                "reference_rows": 100,
+                "window_size": 200,
+                "minimum_window": 100,
+                "amount_psi": None,
+                "drift_threshold": 0.2,
+                "labelled_replay": None,
+                "grafana_url": "http://127.0.0.1:3000/d/fraud-operations",
+                "prometheus_url": "http://127.0.0.1:9090/alerts",
             }
         elif path == "/examples":
             payload = examples

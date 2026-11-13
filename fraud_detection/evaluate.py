@@ -117,6 +117,8 @@ def run(config_path: Path) -> dict:
     write_json(output / "model_info.json", info)
     # Keep a small Git/DVC metrics snapshot. Full per-run evidence lives in MLflow.
     report = {
+        "training_rows": comparison["source"]["training_rows"],
+        "labelled_batch": comparison["source"]["labelled_batch"],
         "validation": {
             name: values["validation"] for name, values in comparison["candidates"].items()
         },

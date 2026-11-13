@@ -237,7 +237,9 @@ def switch(directory: Path, state: dict, target: dict, action: str, log) -> dict
     previous = state["current"]
     if image_id(previous["image"]) != previous["image_id"]:
         raise ValueError("The running image tag changed; preserve its recorded image for rollback.")
-    start = ("up", "-d", "--no-build", "--wait", "--wait-timeout", "90", *SERVICES)
+    # Apply the whole profile so HTTPS also updates Prometheus scraping.
+    # Compose reuses tracking/monitoring containers when their configuration is unchanged.
+    start = ("up", "-d", "--no-build", "--wait", "--wait-timeout", "90")
     target_command = compose_command(target, *start)
     recovery_command = compose_command(previous, *start)
     diagnostic_command = compose_command(target, "logs", "--no-color", "--tail", "30")

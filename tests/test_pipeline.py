@@ -76,6 +76,7 @@ def test_tracking_registration_and_fresh_process_model_load(transactions, tmp_pa
     uri = f"sqlite:///{tmp_path / 'tracking.db'}"
     config = {
         "seed": 42,
+        "maintenance": {"include_labelled_batch": False},
         "data": data_config,
         "model": {"n_estimators": 5, "max_depth": 2, "n_jobs": 1},
         "decision_threshold": 0.5,
@@ -107,6 +108,11 @@ def test_tracking_registration_and_fresh_process_model_load(transactions, tmp_pa
     report = evaluate_run(config_path)
     assert report["test"]["rows"] == len(splits["test"])
     info = json.loads((tmp_path / "model/model_info.json").read_text())
+    from fastapi_app.monitoring import load_reference
+
+    reference = load_reference(info["model_uri"], uri)
+    assert reference["comparison_run_id"] == comparison["parent_run_id"]
+    assert reference["training_rows"] == len(splits["train"])
     local = joblib.load(tmp_path / "model/model.joblib")
     packaged = mlflow.pyfunc.load_model(info["model_uri"])
     inputs = transactions.loc[:, list(INPUT_COLUMNS)]

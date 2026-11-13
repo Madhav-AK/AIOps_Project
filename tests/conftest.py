@@ -17,3 +17,15 @@ def transactions():
             "isFraud": labels,
         }
     )
+
+
+@pytest.fixture
+def monitoring_environment(monkeypatch):
+    from fastapi_app import monitoring
+    from fraud_detection.drift import amount_reference
+
+    reference = amount_reference(np.arange(1, 101))
+    reference["comparison_run_id"] = "test-comparison"
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", "http://tracking.test")
+    monkeypatch.setenv("FRONTEND_HEALTH_URL", "http://frontend.test/health")
+    monkeypatch.setattr(monitoring, "load_reference", lambda uri, tracking: reference)

@@ -78,3 +78,12 @@ def training_positive_weight(labels: pd.Series) -> float:
     if positive == 0 or negative == 0:
         raise ValueError("Training requires both classes.")
     return negative / positive
+
+
+def validate_labelled_batch(batch: pd.DataFrame, used_indices: pd.Index) -> None:
+    """Keep maintenance labels out of every existing train/validation/test row."""
+    validate_inputs(batch.loc[:, list(INPUT_COLUMNS)])
+    if not batch[TARGET].isin([0, 1]).all():
+        raise ValueError("Maintenance labels must be binary and present.")
+    if not batch.index.is_unique or not batch.index.intersection(used_indices).empty:
+        raise ValueError("Maintenance source rows must be unique and outside all original splits.")

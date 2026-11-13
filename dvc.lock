@@ -17,8 +17,8 @@ stages:
       size: 2978
     - path: fraud_detection/data.py
       hash: md5
-      md5: a42aa46605ea9ec3c2376c00ef4838a5
-      size: 3465
+      md5: 5567fc22dbe0fcf25a44f78c25a74924
+      size: 3993
     - path: fraud_detection/features.py
       hash: md5
       md5: 31fdce634a41b2d85392dbee4c9e3cf5
@@ -29,8 +29,8 @@ stages:
       size: 4103
     - path: requirements.txt
       hash: md5
-      md5: 43e7e72e1e765230751d7d877e243f94
-      size: 2993
+      md5: 56f5017655bb882f5c3f134d229e4170
+      size: 3019
     params:
       params.yaml:
         data:
@@ -46,7 +46,7 @@ stages:
     outs:
     - path: data/prepared
       hash: md5
-      md5: e32b1384f1fd1f3db4d9978dd8bdaa2a.dir
+      md5: 1bd05b93e28b4b1eab77fe8e5691a386.dir
       size: 12092057
       nfiles: 4
   train:
@@ -60,10 +60,18 @@ stages:
       hash: md5
       md5: 40850fdc6978ff5ccc0311072038ed7b
       size: 205
+    - path: data/incoming/labelled_batch.parquet
+      hash: md5
+      md5: 804a763ce3a9d1bfbfa9a37e352bca0c
+      size: 476825
     - path: data/prepared/preparation.json
       hash: md5
-      md5: 35dfdf30dd228ca4ddf7809c8bd6b018
+      md5: cb3dfe22a8a9728472be88d5060ffc85
       size: 3541
+    - path: data/prepared/test.parquet
+      hash: md5
+      md5: c8ac40e3d9d8d24472b41e3a85fbe4dc
+      size: 1987540
     - path: data/prepared/train.parquet
       hash: md5
       md5: 259e0680e21fe8ee05e9f876ccb3bb8d
@@ -78,28 +86,32 @@ stages:
       size: 2978
     - path: fraud_detection/data.py
       hash: md5
-      md5: a42aa46605ea9ec3c2376c00ef4838a5
-      size: 3465
+      md5: 5567fc22dbe0fcf25a44f78c25a74924
+      size: 3993
+    - path: fraud_detection/drift.py
+      hash: md5
+      md5: 6131346804b755f0837fda1442d29777
+      size: 1779
     - path: fraud_detection/evaluate.py
       hash: md5
-      md5: 173fc72a7601a0370f9416b9dfbaaffe
-      size: 5829
+      md5: 90c71d057965e6d251f078a04849fb59
+      size: 5959
     - path: fraud_detection/features.py
       hash: md5
       md5: 31fdce634a41b2d85392dbee4c9e3cf5
       size: 3283
     - path: fraud_detection/train.py
       hash: md5
-      md5: 1b106510858e68559d275da2852b91c2
-      size: 7413
+      md5: 2b5ddc0795c69d8490dc6d16c395d546
+      size: 8552
     - path: python_env.yaml
       hash: md5
       md5: 357880fd16f9744b4bafdb2e9894a4e2
       size: 89
     - path: requirements.txt
       hash: md5
-      md5: 43e7e72e1e765230751d7d877e243f94
-      size: 2993
+      md5: 56f5017655bb882f5c3f134d229e4170
+      size: 3019
     - path: scripts/train_in_docker.py
       hash: md5
       md5: 4057ed019bd0207a28e328edc40ba70f
@@ -107,6 +119,9 @@ stages:
     params:
       params.yaml:
         decision_threshold: 0.5
+        maintenance:
+          include_labelled_batch: true
+          labelled_batch: data/incoming/labelled_batch.parquet
         model:
           n_estimators: 100
           max_depth: 3
@@ -121,16 +136,16 @@ stages:
     outs:
     - path: artifacts/candidates
       hash: md5
-      md5: 7b2c1255c0acb86bc0fce2231318775d.dir
-      size: 219701
+      md5: 47b3ba25aa2d1925b4e83adf7568b95b.dir
+      size: 232753
       nfiles: 4
   evaluate:
     cmd: python -m fraud_detection.evaluate
     deps:
     - path: artifacts/candidates
       hash: md5
-      md5: 7b2c1255c0acb86bc0fce2231318775d.dir
-      size: 219701
+      md5: 47b3ba25aa2d1925b4e83adf7568b95b.dir
+      size: 232753
       nfiles: 4
     - path: data/prepared/test.parquet
       hash: md5
@@ -142,16 +157,16 @@ stages:
       size: 2978
     - path: fraud_detection/evaluate.py
       hash: md5
-      md5: 173fc72a7601a0370f9416b9dfbaaffe
-      size: 5829
+      md5: 90c71d057965e6d251f078a04849fb59
+      size: 5959
     - path: fraud_detection/features.py
       hash: md5
       md5: 31fdce634a41b2d85392dbee4c9e3cf5
       size: 3283
     - path: requirements.txt
       hash: md5
-      md5: 43e7e72e1e765230751d7d877e243f94
-      size: 2993
+      md5: 56f5017655bb882f5c3f134d229e4170
+      size: 3019
     params:
       params.yaml:
         decision_threshold: 0.5
@@ -161,10 +176,10 @@ stages:
     outs:
     - path: artifacts/model
       hash: md5
-      md5: e40d50039e1dfee529a2fdc340943533.dir
-      size: 108031
+      md5: 97ba7bca31a8ca545e77f0cd3ba8263f.dir
+      size: 111659
       nfiles: 2
     - path: reports/model/results.json
       hash: md5
-      md5: c2cbad58b4b73422552c73398a228151
-      size: 1748
+      md5: 73c2ef37dc6b6ef220fe81f6ba7df46e
+      size: 2015

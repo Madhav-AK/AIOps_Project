@@ -1,0 +1,5 @@
+outs:
+- md5: 804a763ce3a9d1bfbfa9a37e352bca0c
+  size: 476825
+  hash: md5
+  path: labelled_batch.parquet
