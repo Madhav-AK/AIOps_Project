@@ -230,5 +230,4 @@ __marimo__/
 /mlflow_storage/
 /certs/
 /operations/
-/monitoring/
-/reports/monitoring/
+report.tex

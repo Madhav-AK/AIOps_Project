@@ -1,0 +1,31 @@
+groups:
+  - name: project
+    rules:
+      - alert: MonitoringTargetDown
+        expr: up == 0
+        for: 10s
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Prometheus cannot scrape {{ $labels.job }}.'
+      - alert: ApplicationComponentDown
+        expr: aiops_service_up == 0
+        for: 10s
+        labels:
+          severity: warning
+        annotations:
+          summary: 'The {{ $labels.component }} health probe failed.'
+      - alert: OperationsWorkerDown
+        expr: aiops_worker_up == 0
+        for: 10s
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Start the local operations worker to execute pipeline jobs.'
+      - alert: AmountDistributionDrift
+        expr: (aiops_amount_psi > aiops_drift_threshold) and (aiops_amount_window_count >= aiops_drift_minimum)
+        for: 10s
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Amount PSI exceeds the demonstration threshold; investigate input drift.'

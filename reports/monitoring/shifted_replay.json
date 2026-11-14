@@ -1,0 +1,18 @@
+{
+  "model_uri": "models:/transaction-fraud/20",
+  "decision_threshold": 0.5,
+  "rows": 2000,
+  "concurrency": 4,
+  "seed": 42,
+  "throughput_scope": "Warm API; client wall time includes per-request connections; excludes data loading.",
+  "amount_multiplier": 1000.0,
+  "source_sha256": "7d5f016e7495fdd19a5ef3b07d0f6fdcc1e0f98a96f9b0fb1aabd382c31f01a4",
+  "source_git_commit": "bedf68f0f72877278dbfef46b17ee54227cf3c65",
+  "script_sha256": "06e873dbfb97b381799a16c99582148cb208ac119fa5e082ade68a4e0de399fe",
+  "total_seconds": 10.086277325997798,
+  "requests_per_second": 198.28921368688893,
+  "p50_seconds": 0.0207575035001355,
+  "p95_seconds": 0.026986620447314636,
+  "finished_at": 1794663004.978968,
+  "labelled": false
+}
