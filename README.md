@@ -5,11 +5,12 @@ AI OPs Project Submission
 
 This README file goes through all major submission points.
 
-- Main report and all five documentation deliverables: [REPORT.pdf](REPORT.pdf).
-- Test results and case list: [test_report.md](test_report.md).
+- Main report: [REPORT.pdf](REPORT.pdf).
+- The five documentation PDFs and test report: [docs](docs/).
 - AI usage details: [AI_DISCLOSURE.md](AI_DISCLOSURE.md).
 - Video Link: https://drive.google.com/file/d/1cPaMSbcB42UD9COzOZRbsjQFW30cGylR/view?usp=sharing
 
+- `docs` contains the five required documentation PDFs and the test report.
 - `fraud_detection` contains data preparation, training and evaluation.
 - `fastapi_app` contains the FastAPI backend and Streamlit frontend.
 - `scripts` contains the download, pipeline, deployment and replay commands.
